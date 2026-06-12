@@ -77,11 +77,22 @@ func InitDB() {
 
 	log.Printf("Database connection established for database: %s", dbname)
 
-	// Run auto migrations for the Stock model
-	if err := DB.AutoMigrate(&models.Stock{}); err != nil {
-		log.Fatalf("Failed to auto migrate Stock model: %v", err)
+	// Run auto migrations for the Stock, ExchangeRate and Future models
+	if err := DB.AutoMigrate(&models.Stock{}, &models.ExchangeRate{}, &models.Future{}); err != nil {
+		log.Fatalf("Failed to auto migrate models: %v", err)
 	}
 	log.Println("Database migration completed successfully.")
+
+	// Execute manual migrations to ensure numeric columns have numeric(16,4) type (GORM doesn't auto alter types)
+	alterColumns := []string{"zdf", "hsl", "zf", "speed", "zdf_d5", "zdf_d10", "zdf_d20", "zdf_d60", "zdf_w52", "zdf_y"}
+	for _, col := range alterColumns {
+		alterSql := fmt.Sprintf("ALTER TABLE stocks ALTER COLUMN %s TYPE numeric(16,4);", col)
+		if err := DB.Exec(alterSql).Error; err != nil {
+			log.Printf("Warning: Failed to alter column %s to numeric(16,4): %v", col, err)
+		} else {
+			log.Printf("Successfully altered column %s to numeric(16,4)", col)
+		}
+	}
 }
 
 func getEnv(key, fallback string) string {

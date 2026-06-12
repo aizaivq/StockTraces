@@ -3,7 +3,13 @@ import { Layout, Menu } from 'antd'
 import type { MenuProps } from 'antd'
 import Home from './pages/Home'
 import CnA from './pages/CnA'
+import Hk from './pages/Hk'
+import Us from './pages/Us'
+import Forex from './pages/Forex'
+import Futures from './pages/Futures'
 import Indices from './pages/Indices'
+import Etfs from './pages/Etfs'
+import Funds from './pages/Funds'
 import './App.css'
 
 const { Header, Content } = Layout
@@ -15,6 +21,12 @@ function AppContent() {
   const items: MenuProps['items'] = [
     { key: '/', label: '首页' },
     { key: '/cn_a', label: 'A股' },
+    { key: '/hk', label: '港股' },
+    { key: '/us', label: '美股' },
+    { key: '/etf', label: 'ETF' },
+    { key: '/funds', label: '基金' },
+    { key: '/forex', label: '汇率' },
+    { key: '/futures', label: '期货' },
     { key: '/indices', label: '股票指数' }
   ]
 
@@ -46,6 +58,12 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/cn_a" element={<CnA />} />
+          <Route path="/hk" element={<Hk />} />
+          <Route path="/us" element={<Us />} />
+          <Route path="/etf" element={<Etfs />} />
+          <Route path="/funds" element={<Funds />} />
+          <Route path="/forex" element={<Forex />} />
+          <Route path="/futures" element={<Futures />} />
           <Route path="/indices" element={<Indices />} />
         </Routes>
       </Content>

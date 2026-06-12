@@ -48,8 +48,18 @@ func main() {
 	mux.HandleFunc("/api/health", healthHandler)
 	mux.HandleFunc("/api/stocks", handlers.GetStocks)
 	mux.HandleFunc("/api/stocks/stats", handlers.GetStockStats)
+	mux.HandleFunc("/api/hk-stocks", handlers.GetHkStocks)
+	mux.HandleFunc("/api/hk-stocks/stats", handlers.GetHkStockStats)
+	mux.HandleFunc("/api/us-stocks", handlers.GetUsStocks)
+	mux.HandleFunc("/api/us-stocks/stats", handlers.GetUsStockStats)
+	mux.HandleFunc("/api/exchange-rates", handlers.GetExchangeRates)
+	mux.HandleFunc("/api/futures", handlers.GetFutures)
 	mux.HandleFunc("/api/indices", handlers.GetIndices)
 	mux.HandleFunc("/api/industries", handlers.GetIndustries)
+	mux.HandleFunc("/api/etfs", handlers.GetEtfs)
+	mux.HandleFunc("/api/etfs/stats", handlers.GetEtfStats)
+	mux.HandleFunc("/api/funds", handlers.GetFunds)
+	mux.HandleFunc("/api/funds/stats", handlers.GetFundStats)
 
 	port := ":8080"
 	log.Printf("Server starting on port %s...", port)

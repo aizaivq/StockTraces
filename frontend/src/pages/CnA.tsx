@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Table, Input, Tabs, Alert, Card, Empty, Tag, Button, Spin, Row, Col } from 'antd'
 import type { TableColumnsType, TablePaginationConfig } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
+import StockDetailModal from '../components/StockDetailModal'
 
 interface Stock {
   code: string
@@ -76,6 +77,23 @@ interface MarketStatsItem {
   limit_down: number
 }
 
+interface SectorDetailItem {
+  name: string
+  zdf: number
+  lzg_name: string
+  lzg_code: string
+  lzg_zdf: number
+}
+
+interface SectorStats {
+  total: number
+  rise: number
+  fall: number
+  flat: number
+  top_gainers: SectorDetailItem[]
+  top_losers: SectorDetailItem[]
+}
+
 interface StatsData {
   sh_main: MarketStatsItem
   sh_kcb: MarketStatsItem
@@ -83,11 +101,16 @@ interface StatsData {
   sz_cyb: MarketStatsItem
   bj: MarketStatsItem
   summary: MarketStatsItem
+  sectors?: SectorStats
 }
 
 export default function CnA() {
   // Navigation State
   const [activeMainTab, setActiveMainTab] = useState('indices')
+
+  // Details Modal States
+  const [detailVisible, setDetailVisible] = useState(false)
+  const [selectedStock, setSelectedStock] = useState<any>(null)
 
   // Tab 1: Indices States
   const [indices, setIndices] = useState<IndexDetail[]>([])
@@ -610,6 +633,22 @@ export default function CnA() {
           loading={loading}
           onChange={handleTableChange}
           scroll={{ x: 'max-content' }}
+          onRow={(record) => ({
+            onClick: () => {
+              setSelectedStock({
+                code: record.code,
+                name: record.name,
+                zxj: record.zxj,
+                zd: record.zd,
+                zdf: record.zdf,
+                volume: record.volume,
+                turnover: record.turnover,
+                stock_type: record.stock_type
+              })
+              setDetailVisible(true)
+            },
+            style: { cursor: 'pointer' }
+          })}
           pagination={{
             current: currentPage,
             pageSize: limit,
@@ -636,70 +675,206 @@ export default function CnA() {
       { key: 'bj', title: '北交所 (京市)', desc: '北京证券交易所公开发行股票数据统计', item: stats.bj, color: '#f59e0b' }
     ]
 
+    const sectors = stats.sectors
+
     return (
-      <Row gutter={[24, 24]}>
-        {marketGroups.map((group) => {
-          const { item, title, desc, color } = group
-          if (!item) return null
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        {/* Section 1: Stock Market Boards */}
+        <div>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '4px', height: '18px', background: 'var(--accent)', borderRadius: '2px' }} />
+            大盘指数及股票市场统计
+          </h2>
+          <Row gutter={[24, 24]}>
+            {marketGroups.map((group) => {
+              const { item, title, desc, color } = group
+              if (!item) return null
 
-          const risePercent = ((item.rise / item.total) * 100).toFixed(1)
-          const fallPercent = ((item.fall / item.total) * 100).toFixed(1)
-          const flatPercent = (100 - parseFloat(risePercent) - parseFloat(fallPercent)).toFixed(1)
+              const risePercent = ((item.rise / item.total) * 100).toFixed(1)
+              const fallPercent = ((item.fall / item.total) * 100).toFixed(1)
+              const flatPercent = (100 - parseFloat(risePercent) - parseFloat(fallPercent)).toFixed(1)
 
-          return (
-            <Col xs={24} md={12} key={group.key}>
-              <Card 
-                bordered 
-                title={
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '4px', height: '18px', background: color, borderRadius: '2px' }} />
-                    <span style={{ fontSize: '16px', fontWeight: 600 }}>{title}</span>
-                  </div>
-                }
-                style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', border: '1px solid #f0f0f0' }}
-              >
-                <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'rgba(0,0,0,0.45)' }}>{desc}</p>
-                
-                {/* Big summary total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <span style={{ fontSize: '14px', color: 'rgba(0,0,0,0.65)' }}>总计股票家数</span>
-                  <span style={{ fontSize: '28px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
-                    {item.total.toLocaleString()}
-                  </span>
-                </div>
-
-                {/* Sentiment Bar Chart */}
-                <div style={{ display: 'flex', height: '10px', borderRadius: '5px', overflow: 'hidden', margin: '16px 0 8px 0', background: '#f0f0f0' }}>
-                  <div style={{ width: `${risePercent}%`, background: 'var(--stock-up)', transition: 'width 0.5s ease' }} title={`上涨: ${risePercent}%`} />
-                  <div style={{ width: `${flatPercent}%`, background: 'var(--stock-zero)', transition: 'width 0.5s ease' }} title={`平盘: ${flatPercent}%`} />
-                  <div style={{ width: `${fallPercent}%`, background: 'var(--stock-down)', transition: 'width 0.5s ease' }} title={`下跌: ${fallPercent}%`} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '20px' }}>
-                  <span>上涨: {item.rise} ({risePercent}%)</span>
-                  <span>平盘: {item.flat} ({flatPercent}%)</span>
-                  <span>下跌: {item.fall} ({fallPercent}%)</span>
-                </div>
-
-                {/* Limit Ups and Limit Downs */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', borderTop: '1px solid #f5f5f5', paddingTop: '16px' }}>
-                  <div style={{ background: 'rgba(239, 68, 68, 0.04)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(239, 68, 68, 0.08)' }}>
-                    <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '4px' }}>涨停数 (Limit Up)</div>
-                    <div className="stock-up" style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
-                      {item.limit_up}
+              return (
+                <Col xs={24} md={12} key={group.key}>
+                  <Card 
+                    bordered 
+                    title={
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '4px', height: '18px', background: color, borderRadius: '2px' }} />
+                        <span style={{ fontSize: '15px', fontWeight: 600 }}>{title}</span>
+                      </div>
+                    }
+                    style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', border: '1px solid #f0f0f0' }}
+                  >
+                    <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'rgba(0,0,0,0.45)' }}>{desc}</p>
+                    
+                    {/* Big summary total */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                      <span style={{ fontSize: '14px', color: 'rgba(0,0,0,0.65)' }}>总计股票家数</span>
+                      <span style={{ fontSize: '28px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                        {item.total.toLocaleString()}
+                      </span>
                     </div>
-                  </div>
-                  <div style={{ background: 'rgba(34, 197, 94, 0.04)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(34, 197, 94, 0.08)' }}>
-                    <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '4px' }}>跌停数 (Limit Down)</div>
-                    <div className="stock-down" style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
-                      {item.limit_down}
+
+                    {/* Sentiment Bar Chart */}
+                    <div style={{ display: 'flex', height: '10px', borderRadius: '5px', overflow: 'hidden', margin: '16px 0 8px 0', background: '#f0f0f0' }}>
+                      <div style={{ width: `${risePercent}%`, background: 'var(--stock-up)', transition: 'width 0.5s ease' }} title={`上涨: ${risePercent}%`} />
+                      <div style={{ width: `${flatPercent}%`, background: 'var(--stock-zero)', transition: 'width 0.5s ease' }} title={`平盘: ${flatPercent}%`} />
+                      <div style={{ width: `${fallPercent}%`, background: 'var(--stock-down)', transition: 'width 0.5s ease' }} title={`下跌: ${fallPercent}%`} />
                     </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '20px' }}>
+                      <span>上涨: {item.rise} ({risePercent}%)</span>
+                      <span>平盘: {item.flat} ({flatPercent}%)</span>
+                      <span>下跌: {item.fall} ({fallPercent}%)</span>
+                    </div>
+
+                    {/* Limit Ups and Limit Downs */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', borderTop: '1px solid #f5f5f5', paddingTop: '16px' }}>
+                      <div style={{ background: 'rgba(239, 68, 68, 0.04)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(239, 68, 68, 0.08)' }}>
+                        <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '4px' }}>涨停数 (Limit Up)</div>
+                        <div className="stock-up" style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                          {item.limit_up}
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(34, 197, 94, 0.04)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(34, 197, 94, 0.08)' }}>
+                        <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '4px' }}>跌停数 (Limit Down)</div>
+                        <div className="stock-down" style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                          {item.limit_down}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </Col>
+              )
+            })}
+          </Row>
+        </div>
+
+        {/* Section 2: Industry Sector statistics */}
+        {sectors && sectors.total > 0 && (
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ width: '4px', height: '18px', background: 'var(--accent)', borderRadius: '2px' }} />
+              行业板块统计看板
+            </h2>
+            <Row gutter={[24, 24]}>
+              {/* Overview Card */}
+              <Col xs={24} md={12}>
+                <Card 
+                  bordered 
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '4px', height: '18px', background: '#3b82f6', borderRadius: '2px' }} />
+                      <span style={{ fontSize: '15px', fontWeight: 600 }}>行业板块整体概况</span>
+                    </div>
+                  }
+                  style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', border: '1px solid #f0f0f0', height: '100%' }}
+                >
+                  <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'rgba(0,0,0,0.45)' }}>基于二级行业分类的板块上涨与下跌比例统计</p>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <span style={{ fontSize: '14px', color: 'rgba(0,0,0,0.65)' }}>总计板块数量</span>
+                    <span style={{ fontSize: '28px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                      {sectors.total.toLocaleString()}
+                    </span>
                   </div>
-                </div>
-              </Card>
-            </Col>
-          )
-        })}
-      </Row>
+
+                  {/* Sentiment Bar */}
+                  {(() => {
+                    const riseP = ((sectors.rise / sectors.total) * 100).toFixed(1)
+                    const fallP = ((sectors.fall / sectors.total) * 100).toFixed(1)
+                    const flatP = (100 - parseFloat(riseP) - parseFloat(fallP)).toFixed(1)
+                    return (
+                      <>
+                        <div style={{ display: 'flex', height: '10px', borderRadius: '5px', overflow: 'hidden', margin: '16px 0 8px 0', background: '#f0f0f0' }}>
+                          <div style={{ width: `${riseP}%`, background: 'var(--stock-up)', transition: 'width 0.5s ease' }} />
+                          <div style={{ width: `${flatP}%`, background: 'var(--stock-zero)', transition: 'width 0.5s ease' }} />
+                          <div style={{ width: `${fallP}%`, background: 'var(--stock-down)', transition: 'width 0.5s ease' }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '20px' }}>
+                          <span>上涨: {sectors.rise} ({riseP}%)</span>
+                          <span>平盘: {sectors.flat} ({flatP}%)</span>
+                          <span>下跌: {sectors.fall} ({fallP}%)</span>
+                        </div>
+
+                        {/* Rise and Fall Sectors */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', borderTop: '1px solid #f5f5f5', paddingTop: '16px', marginTop: '16px' }}>
+                          <div style={{ background: 'rgba(239, 68, 68, 0.04)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(239, 68, 68, 0.08)' }}>
+                            <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '4px' }}>上涨板块数</div>
+                            <div className="stock-up" style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                              {sectors.rise}
+                            </div>
+                          </div>
+                          <div style={{ background: 'rgba(34, 197, 94, 0.04)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(34, 197, 94, 0.08)' }}>
+                            <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '4px' }}>下跌板块数</div>
+                            <div className="stock-down" style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                              {sectors.fall}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </Card>
+              </Col>
+
+              {/* Leaderboards Card */}
+              <Col xs={24} md={12}>
+                <Card 
+                  bordered
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '4px', height: '18px', background: '#ec4899', borderRadius: '2px' }} />
+                      <span style={{ fontSize: '15px', fontWeight: 600 }}>行业行情排行领涨/领跌</span>
+                    </div>
+                  }
+                  style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', border: '1px solid #f0f0f0', height: '100%' }}
+                >
+                  {/* Gainers */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--stock-up)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      📈 领涨板块 Top 3
+                    </div>
+                    {sectors.top_gainers && sectors.top_gainers.map((item, idx) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '6px 0', borderBottom: '1px dashed #f5f5f5' }}>
+                        <div>
+                          <span style={{ fontWeight: 600 }}>{item.name}</span>
+                          <span style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginLeft: '8px' }}>
+                            领涨股: {item.lzg_name} ({item.lzg_code})
+                          </span>
+                        </div>
+                        <span style={{ color: 'var(--stock-up)', fontWeight: 600, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                          +{item.zdf.toFixed(2)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Losers */}
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--stock-down)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      📉 领跌板块 Top 3
+                    </div>
+                    {sectors.top_losers && sectors.top_losers.map((item, idx) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '6px 0', borderBottom: '1px dashed #f5f5f5' }}>
+                        <div>
+                          <span style={{ fontWeight: 600 }}>{item.name}</span>
+                          <span style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginLeft: '8px' }}>
+                            领跌股: {item.lzg_name} ({item.lzg_code})
+                          </span>
+                        </div>
+                        <span style={{ color: 'var(--stock-down)', fontWeight: 600, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                          {item.zdf.toFixed(2)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </Col>
+            </Row>
+          </div>
+        )}
+      </div>
     )
   }
 
@@ -782,8 +957,19 @@ export default function CnA() {
                     <Col xs={24} sm={12} md={8} lg={6} key={item.qtcode}>
                       <Card 
                         hoverable 
-                        style={{ borderRadius: '8px', border: '1px solid #f0f0f0' }}
+                        style={{ borderRadius: '8px', border: '1px solid #f0f0f0', cursor: 'pointer' }}
                         styles={{ body: { padding: '16px' } }}
+                        onClick={() => {
+                          setSelectedStock({
+                            code: item.qtcode || item.code,
+                            name: item.name,
+                            zxj: parseFloat(item.zxj),
+                            zd: parseFloat(item.zdf),
+                            zdf: parseFloat(item.zdf),
+                            stock_type: 'INDEX'
+                          })
+                          setDetailVisible(true)
+                        }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
@@ -867,6 +1053,14 @@ export default function CnA() {
           </Spin>
         )}
       </Card>
+      <StockDetailModal 
+        visible={detailVisible}
+        onClose={() => {
+          setDetailVisible(false)
+          setSelectedStock(null)
+        }}
+        stock={selectedStock}
+      />
     </div>
   )
 }

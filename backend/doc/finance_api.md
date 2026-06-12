@@ -355,5 +355,138 @@
 
 参见 `tencent_finance_api.md` 对应的第 7 部分中的字段详细说明。
 
+---
 
+## 5. 获取国际期货和大宗商品接口
 
+### 接口信息
+
+- **接口路径**：`/api/futures`
+- **请求方式**：`GET`
+- **基础 URL**：`http://localhost:8080` (本地开发环境)
+- **描述**：获取从数据库中检索的全球商品期货、汇率期货和大宗商品的实时行情数据，按分类与代码进行排序。支持 CORS 跨域调用。
+
+### 请求参数 (Query Parameters)
+
+| 参数名 | 类型 | 必选 | 默认值 | 示例值 | 说明 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `_appver` | string | 是 | - | `11.17.0` | 客户端 App 版本号（接口准入必填参数） |
+
+---
+
+### 返回格式
+
+### 返回示例 (JSON)
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "data": [
+    {
+      "code": "GC",
+      "name": "COMEX黄金",
+      "category": "precious_metal",
+      "zxj": 4195.5,
+      "zd": -90.9,
+      "zdf": -2.12,
+      "location": "纽约COMEX",
+      "state": "open",
+      "img": "http://dldir1.qq.com/dlomg/istock/img/fuGC.png",
+      "qtcode": "fuGC",
+      "updated_at": "2026-06-10T16:29:24.52701+08:00"
+    }
+  ]
+}
+```
+
+### 返回字段说明
+
+#### 外层字段
+| 字段名 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `code` | integer | 状态码（`0` 表示成功） |
+| `msg` | string | 状态信息（如 `"ok"`） |
+| `data` | array | 期货数据详情列表 |
+
+#### `data` 数组内元素字段 (期货合约详情)
+| 字段名 | 类型 | 示例值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `code` | string | `"GC"` | 期货合约代码 |
+| `name` | string | `"COMEX黄金"` | 期货合约中文名称 |
+| `category` | string | `"precious_metal"` | 期货类型分类（`index` 指数期货, `forex` 外汇期货, `interest_rate` 利率期货, `precious_metal` 贵金属, `basic_metal` 基本金属, `agriculture` 农产品, `energy` 能源） |
+| `zxj` | float | `4195.5` | 最新价 (最新行情报价) |
+| `zd` | float | `-90.9` | 涨跌额 |
+| `zdf` | float | `-2.12` | 涨跌幅百分比 (%) |
+| `location` | string | `"纽约COMEX"` | 交易场所 |
+| `state` | string | `"open"` | 交易状态（`open` 代表交易中，`close` 代表已收盘） |
+| `img` | string | `http://...` | 合约图标 URL |
+| `qtcode` | string | `"fuGC"` | 行情通道代码 |
+| `updated_at` | string | `2026-06-10T...` | 数据库最后同步/更新时间 |
+
+---
+
+## 6. 获取外汇与金属汇率接口
+
+### 接口信息
+
+- **接口路径**：`/api/exchange-rates`
+- **请求方式**：`GET`
+- **基础 URL**：`http://localhost:8080` (本地开发环境)
+- **描述**：获取全球主流货币对以及黄金、白银等贵金属的实时汇率报价数据。支持 CORS 跨域调用。
+
+### 请求参数 (Query Parameters)
+
+| 参数名 | 类型 | 必选 | 默认值 | 示例值 | 说明 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `_appver` | string | 是 | - | `11.17.0` | 客户端 App 版本号（接口准入必填参数） |
+
+---
+
+### 返回格式
+
+### 返回示例 (JSON)
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "data": [
+    {
+      "code": "USDCNY",
+      "name": "美元人民币",
+      "zxj": 6.777,
+      "zd": -0.0055,
+      "zdf": -0.08,
+      "high": 6.7773,
+      "low": 6.7721,
+      "open": 6.777,
+      "prev_close": 6.7825,
+      "updated_at": "2026-06-10T16:29:23.12345+08:00"
+    }
+  ]
+}
+```
+
+### 返回字段说明
+
+#### 外层字段
+| 字段名 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `code` | integer | 状态码（`0` 表示成功） |
+| `msg` | string | 状态信息（如 `"ok"`） |
+| `data` | array | 汇率数据详情列表 |
+
+#### `data` 数组内元素字段 (汇率行情详情)
+| 字段名 | 类型 | 示例值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `code` | string | `"USDCNY"` | 货币对/汇率代码 |
+| `name` | string | `"美元人民币"` | 汇率中文名称 |
+| `zxj` | float | `6.777` | 最新汇率价 (报价) |
+| `zd` | float | `-0.0055` | 汇率涨跌额 |
+| `zdf` | float | `-0.08` | 汇率涨跌幅百分比 (%) |
+| `high` | float | `6.7773` | 今日最高汇率 |
+| `low` | float | `6.7721` | 今日最低汇率 |
+| `open` | float | `6.777` | 今日开盘汇率 |
+| `prev_close` | float | `6.7825` | 昨日收盘汇率 |
+| `updated_at` | string | `2026-06-10T...` | 数据库最后同步/更新时间 |
