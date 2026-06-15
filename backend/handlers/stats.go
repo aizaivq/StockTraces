@@ -15,23 +15,27 @@ import (
 
 // ExchangeStats represents the database raw query scan target.
 type ExchangeStats struct {
-	Exchange  string `gorm:"column:exchange"`
-	Total     int64  `gorm:"column:total"`
-	Rise      int64  `gorm:"column:rise"`
-	Fall      int64  `gorm:"column:fall"`
-	Flat      int64  `gorm:"column:flat"`
-	LimitUp   int64  `gorm:"column:limit_up"`
-	LimitDown int64  `gorm:"column:limit_down"`
+	Exchange  string  `gorm:"column:exchange"`
+	Total     int64   `gorm:"column:total"`
+	Rise      int64   `gorm:"column:rise"`
+	Fall      int64   `gorm:"column:fall"`
+	Flat      int64   `gorm:"column:flat"`
+	LimitUp   int64   `gorm:"column:limit_up"`
+	LimitDown int64   `gorm:"column:limit_down"`
+	AvgZdf    float64 `gorm:"column:avg_zdf"`
+	MedianZdf float64 `gorm:"column:median_zdf"`
 }
 
 // MarketStats represents the final structured stats returned for each exchange.
 type MarketStats struct {
-	Total     int64 `json:"total"`
-	Rise      int64 `json:"rise"`
-	Fall      int64 `json:"fall"`
-	Flat      int64 `json:"flat"`
-	LimitUp   int64 `json:"limit_up"`
-	LimitDown int64 `json:"limit_down"`
+	Total     int64   `json:"total"`
+	Rise      int64   `json:"rise"`
+	Fall      int64   `json:"fall"`
+	Flat      int64   `json:"flat"`
+	LimitUp   int64   `json:"limit_up"`
+	LimitDown int64   `json:"limit_down"`
+	AvgZdf    float64 `json:"avg_zdf"`
+	MedianZdf float64 `json:"median_zdf"`
 }
 
 // GetStockStats handles GET requests to retrieve statistics of A-shares.
@@ -95,7 +99,9 @@ func GetStockStats(w http.ResponseWriter, r *http.Request) {
 				((code LIKE 'sz30%' OR code LIKE 'sh68%') AND zdf <= -19.9) OR
 				((name LIKE '%ST%' OR name LIKE '%*ST%') AND zdf <= -4.9 AND code NOT LIKE 'bj%' AND code NOT LIKE 'sz30%' AND code NOT LIKE 'sh68%') OR
 				(zdf <= -9.9 AND code NOT LIKE 'bj%' AND code NOT LIKE 'sz30%' AND code NOT LIKE 'sh68%' AND name NOT LIKE '%ST%' AND name NOT LIKE '%*ST%')
-			THEN 1 ELSE 0 END) as limit_down
+			THEN 1 ELSE 0 END) as limit_down,
+			AVG(zdf) as avg_zdf,
+			percentile_cont(0.5) WITHIN GROUP (ORDER BY zdf) as median_zdf
 		FROM stocks
 		WHERE stock_type IN ('GP-A', 'GP-A-CYB', 'GP-A-KCB', 'GP')
 		GROUP BY exchange;
@@ -108,13 +114,53 @@ func GetStockStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	summarySqlQuery := `
+		SELECT 
+			COUNT(*) as total,
+			SUM(CASE WHEN zdf > 0 THEN 1 ELSE 0 END) as rise,
+			SUM(CASE WHEN zdf < 0 THEN 1 ELSE 0 END) as fall,
+			SUM(CASE WHEN zdf = 0 THEN 1 ELSE 0 END) as flat,
+			SUM(CASE WHEN 
+				(code LIKE 'bj%' AND zdf >= 29.9) OR
+				((code LIKE 'sz30%' OR code LIKE 'sh68%') AND zdf >= 19.9) OR
+				((name LIKE '%ST%' OR name LIKE '%*ST%') AND zdf >= 4.9 AND code NOT LIKE 'bj%' AND code NOT LIKE 'sz30%' AND code NOT LIKE 'sh68%') OR
+				(zdf >= 9.9 AND code NOT LIKE 'bj%' AND code NOT LIKE 'sz30%' AND code NOT LIKE 'sh68%' AND name NOT LIKE '%ST%' AND name NOT LIKE '%*ST%')
+			THEN 1 ELSE 0 END) as limit_up,
+			SUM(CASE WHEN 
+				(code LIKE 'bj%' AND zdf <= -29.9) OR
+				((code LIKE 'sz30%' OR code LIKE 'sh68%') AND zdf <= -19.9) OR
+				((name LIKE '%ST%' OR name LIKE '%*ST%') AND zdf <= -4.9 AND code NOT LIKE 'bj%' AND code NOT LIKE 'sz30%' AND code NOT LIKE 'sh68%') OR
+				(zdf <= -9.9 AND code NOT LIKE 'bj%' AND code NOT LIKE 'sz30%' AND code NOT LIKE 'sh68%' AND name NOT LIKE '%ST%' AND name NOT LIKE '%*ST%')
+			THEN 1 ELSE 0 END) as limit_down,
+			AVG(zdf) as avg_zdf,
+			percentile_cont(0.5) WITHIN GROUP (ORDER BY zdf) as median_zdf
+		FROM stocks
+		WHERE stock_type IN ('GP-A', 'GP-A-CYB', 'GP-A-KCB', 'GP');
+	`
+
+	var summaryRes ExchangeStats
+	if err := db.DB.Raw(summarySqlQuery).Scan(&summaryRes).Error; err != nil {
+		http.Error(w, "Database query error", http.StatusInternalServerError)
+		log.Printf("Error querying A-share summary statistics: %v", err)
+		return
+	}
+
 	// Initialize individual market stats
 	shMainStats := MarketStats{}
 	shKcbStats := MarketStats{}
 	szMainStats := MarketStats{}
 	szCybStats := MarketStats{}
 	bjStats := MarketStats{}
-	summary := MarketStats{}
+	summary := MarketStats{
+		Total:     summaryRes.Total,
+		Rise:      summaryRes.Rise,
+		Fall:      summaryRes.Fall,
+		Flat:      summaryRes.Flat,
+		LimitUp:   summaryRes.LimitUp,
+		LimitDown: summaryRes.LimitDown,
+		AvgZdf:    summaryRes.AvgZdf,
+		MedianZdf: summaryRes.MedianZdf,
+	}
 
 	// Map database results
 	for _, res := range results {
@@ -125,6 +171,8 @@ func GetStockStats(w http.ResponseWriter, r *http.Request) {
 			Flat:      res.Flat,
 			LimitUp:   res.LimitUp,
 			LimitDown: res.LimitDown,
+			AvgZdf:    res.AvgZdf,
+			MedianZdf: res.MedianZdf,
 		}
 
 		switch res.Exchange {
@@ -139,14 +187,6 @@ func GetStockStats(w http.ResponseWriter, r *http.Request) {
 		case "bj":
 			bjStats = stats
 		}
-
-		// Accumulate overall summary
-		summary.Total += res.Total
-		summary.Rise += res.Rise
-		summary.Fall += res.Fall
-		summary.Flat += res.Flat
-		summary.LimitUp += res.LimitUp
-		summary.LimitDown += res.LimitDown
 	}
 
 	// Fetch industry sector statistics
@@ -227,7 +267,9 @@ func GetHkStockStats(w http.ResponseWriter, r *http.Request) {
 			SUM(CASE WHEN zdf < 0 THEN 1 ELSE 0 END) as fall,
 			SUM(CASE WHEN zdf = 0 THEN 1 ELSE 0 END) as flat,
 			SUM(CASE WHEN zdf >= 10.0 THEN 1 ELSE 0 END) as limit_up,
-			SUM(CASE WHEN zdf <= -10.0 THEN 1 ELSE 0 END) as limit_down
+			SUM(CASE WHEN zdf <= -10.0 THEN 1 ELSE 0 END) as limit_down,
+			AVG(zdf) as avg_zdf,
+			percentile_cont(0.5) WITHIN GROUP (ORDER BY zdf) as median_zdf
 		FROM stocks
 		WHERE stock_type IN ('GP-HK', 'GP-HK-GEM', 'GP-HK-AH')
 		GROUP BY exchange;
@@ -240,9 +282,39 @@ func GetHkStockStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	summarySqlQuery := `
+		SELECT 
+			COUNT(*) as total,
+			SUM(CASE WHEN zdf > 0 THEN 1 ELSE 0 END) as rise,
+			SUM(CASE WHEN zdf < 0 THEN 1 ELSE 0 END) as fall,
+			SUM(CASE WHEN zdf = 0 THEN 1 ELSE 0 END) as flat,
+			SUM(CASE WHEN zdf >= 10.0 THEN 1 ELSE 0 END) as limit_up,
+			SUM(CASE WHEN zdf <= -10.0 THEN 1 ELSE 0 END) as limit_down,
+			AVG(zdf) as avg_zdf,
+			percentile_cont(0.5) WITHIN GROUP (ORDER BY zdf) as median_zdf
+		FROM stocks
+		WHERE stock_type IN ('GP-HK', 'GP-HK-GEM', 'GP-HK-AH');
+	`
+
+	var summaryRes ExchangeStats
+	if err := db.DB.Raw(summarySqlQuery).Scan(&summaryRes).Error; err != nil {
+		http.Error(w, "Database query error", http.StatusInternalServerError)
+		log.Printf("Error querying HK stock summary statistics: %v", err)
+		return
+	}
+
 	hkMainStats := MarketStats{}
 	hkGemStats := MarketStats{}
-	summary := MarketStats{}
+	summary := MarketStats{
+		Total:     summaryRes.Total,
+		Rise:      summaryRes.Rise,
+		Fall:      summaryRes.Fall,
+		Flat:      summaryRes.Flat,
+		LimitUp:   summaryRes.LimitUp,
+		LimitDown: summaryRes.LimitDown,
+		AvgZdf:    summaryRes.AvgZdf,
+		MedianZdf: summaryRes.MedianZdf,
+	}
 
 	for _, res := range results {
 		stats := MarketStats{
@@ -252,6 +324,8 @@ func GetHkStockStats(w http.ResponseWriter, r *http.Request) {
 			Flat:      res.Flat,
 			LimitUp:   res.LimitUp,
 			LimitDown: res.LimitDown,
+			AvgZdf:    res.AvgZdf,
+			MedianZdf: res.MedianZdf,
 		}
 
 		switch res.Exchange {
@@ -260,13 +334,6 @@ func GetHkStockStats(w http.ResponseWriter, r *http.Request) {
 		case "hk_gem":
 			hkGemStats = stats
 		}
-
-		summary.Total += res.Total
-		summary.Rise += res.Rise
-		summary.Fall += res.Fall
-		summary.Flat += res.Flat
-		summary.LimitUp += res.LimitUp
-		summary.LimitDown += res.LimitDown
 	}
 
 	response := map[string]interface{}{
@@ -320,7 +387,9 @@ func GetUsStockStats(w http.ResponseWriter, r *http.Request) {
 			SUM(CASE WHEN zdf < 0 THEN 1 ELSE 0 END) as fall,
 			SUM(CASE WHEN zdf = 0 THEN 1 ELSE 0 END) as flat,
 			SUM(CASE WHEN zdf >= 10.0 THEN 1 ELSE 0 END) as limit_up,
-			SUM(CASE WHEN zdf <= -10.0 THEN 1 ELSE 0 END) as limit_down
+			SUM(CASE WHEN zdf <= -10.0 THEN 1 ELSE 0 END) as limit_down,
+			AVG(zdf) as avg_zdf,
+			percentile_cont(0.5) WITHIN GROUP (ORDER BY zdf) as median_zdf
 		FROM stocks WHERE stock_type LIKE '%GP-US-CDR%'
 		UNION ALL
 		SELECT 'us_tec' as exchange, COUNT(*) as total,
@@ -328,7 +397,9 @@ func GetUsStockStats(w http.ResponseWriter, r *http.Request) {
 			SUM(CASE WHEN zdf < 0 THEN 1 ELSE 0 END) as fall,
 			SUM(CASE WHEN zdf = 0 THEN 1 ELSE 0 END) as flat,
 			SUM(CASE WHEN zdf >= 10.0 THEN 1 ELSE 0 END) as limit_up,
-			SUM(CASE WHEN zdf <= -10.0 THEN 1 ELSE 0 END) as limit_down
+			SUM(CASE WHEN zdf <= -10.0 THEN 1 ELSE 0 END) as limit_down,
+			AVG(zdf) as avg_zdf,
+			percentile_cont(0.5) WITHIN GROUP (ORDER BY zdf) as median_zdf
 		FROM stocks WHERE stock_type LIKE '%GP-US-TEC%'
 		UNION ALL
 		SELECT 'summary' as exchange, COUNT(*) as total,
@@ -336,7 +407,9 @@ func GetUsStockStats(w http.ResponseWriter, r *http.Request) {
 			SUM(CASE WHEN zdf < 0 THEN 1 ELSE 0 END) as fall,
 			SUM(CASE WHEN zdf = 0 THEN 1 ELSE 0 END) as flat,
 			SUM(CASE WHEN zdf >= 10.0 THEN 1 ELSE 0 END) as limit_up,
-			SUM(CASE WHEN zdf <= -10.0 THEN 1 ELSE 0 END) as limit_down
+			SUM(CASE WHEN zdf <= -10.0 THEN 1 ELSE 0 END) as limit_down,
+			AVG(zdf) as avg_zdf,
+			percentile_cont(0.5) WITHIN GROUP (ORDER BY zdf) as median_zdf
 		FROM stocks WHERE stock_type LIKE '%GP-US-CDR%' OR stock_type LIKE '%GP-US-TEC%';
 	`
 
@@ -359,6 +432,8 @@ func GetUsStockStats(w http.ResponseWriter, r *http.Request) {
 			Flat:      res.Flat,
 			LimitUp:   res.LimitUp,
 			LimitDown: res.LimitDown,
+			AvgZdf:    res.AvgZdf,
+			MedianZdf: res.MedianZdf,
 		}
 
 		switch res.Exchange {

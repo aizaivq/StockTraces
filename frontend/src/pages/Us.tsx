@@ -38,6 +38,8 @@ interface MarketStatsItem {
   flat: number
   limit_up: number
   limit_down: number
+  avg_zdf?: number
+  median_zdf?: number
 }
 
 interface UsStatsData {
@@ -438,6 +440,22 @@ export default function Us() {
                     <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '4px' }}>大跌数 (zdf &lt;= -10%)</div>
                     <div className="stock-down" style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
                       {item.limit_down}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Median and Average Change Percents */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', borderTop: '1px solid #f5f5f5', paddingTop: '16px', marginTop: '16px' }}>
+                  <div style={{ background: 'rgba(170, 59, 255, 0.04)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(170, 59, 255, 0.08)' }}>
+                    <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '4px' }}>中位涨跌幅</div>
+                    <div className={getStockColorClass(item.median_zdf ?? 0)} style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                      {formatWithSign(item.median_zdf ?? 0)}%
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(170, 59, 255, 0.04)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(170, 59, 255, 0.08)' }}>
+                    <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)', marginBottom: '4px' }}>平均涨跌幅</div>
+                    <div className={getStockColorClass(item.avg_zdf ?? 0)} style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace' }}>
+                      {formatWithSign(item.avg_zdf ?? 0)}%
                     </div>
                   </div>
                 </div>
